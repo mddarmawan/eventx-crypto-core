@@ -1,0 +1,21 @@
+version: "3.7"
+
+services:
+  server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: base
+    volumes:
+      - ./src:/home/node/app/src
+    container_name: server
+    expose:
+      - "8000"
+    ports:
+      - "8000:8000"
+    command: npm run dev
+  redis-server:
+    container_name: redis-server
+    image: "redis:alpine"
+    ports:
+      - "6379:6379"
