@@ -15,6 +15,7 @@
     "got": "^11.8.2",
     "http": "0.0.0",
     "lodash": "^4.17.21",
+    "redis": "^3.1.2",
     "socket.io": "^2.2.0",
     "ws": "^7.4.6"
   },
@@ -22,6 +23,7 @@
     "@types/got": "^9.6.12",
     "@types/jest": "^27.0.1",
     "@types/lodash": "^4.14.173",
+    "@types/redis": "^2.8.32",
     "@types/typescript": "^2.0.0",
     "@types/ws": "^7.4.7",
     "@typescript-eslint/eslint-plugin": "^4.29.2",
