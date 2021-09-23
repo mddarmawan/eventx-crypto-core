@@ -1,118 +1,51 @@
-import WebSocket, { Server } from 'ws';
-import got from 'got';
+import redis from 'redis';
+import { Server } from 'ws';
+import { tickerWithInterval, Ticker } from './ticker';
 
-const port = 8000;
+const PORT = {
+  redis: 6379,
+  wss: 8000,
+};
+const publisher = redis.createClient({
+  host: 'redis-server',
+  port: PORT.redis
+});
+const subscriber = redis.createClient({
+  host: 'redis-server',
+  port: PORT.redis
+});
 const wss = new Server({
-  port,
+  port: PORT.wss,
 });
 
-interface Ticker {
-  ticker: TickerData;
-  timestamp: number;
-  success: boolean;
-  error: string;
-  code: TickerCode;
-  name: TickerName;
-}
+setInterval(async () => {
+  const seconds = new Date().getSeconds();
+  if (seconds === 3) {
+    const tickers = await tickerWithInterval() as Ticker[];
+    const data = JSON.stringify(tickers);
+    publisher.set('tickers', data);
+    publisher.publish('tickers', data);
+  }
+}, 1000);
 
-interface TickerData {
-  base: TickerBase;
-  target: TickerTarget;
-  price: string;
-  volume: string;
-  change: string;
-}
-
-type TickerBase =
-  | 'BTC'
-  | 'ETH'
-  | 'LTC'
-  | 'XMR'
-  | 'XRP'
-  | 'DOGE'
-  | 'DASH'
-  | 'MAID'
-  | 'LSK'
-  | 'SJCX';
-
-type TickerTarget = 'USD';
-type TickerCode = `${TickerBase}-${TickerTarget}`;
-
-type TickerName =
-  | 'Bitcoin'
-  | 'Ether'
-  | 'Litecoin'
-  | 'Monero'
-  | 'Ripple'
-  | 'Dogecoin'
-  | 'Dash'
-  | 'MaidSafeeCoin'
-  | 'Lisk'
-  | 'Storjoin X';
-
-const tickers: Record<TickerCode, TickerName> = {
-  'BTC-USD': 'Bitcoin',
-  'ETH-USD': 'Ether',
-  'LTC-USD': 'Litecoin',
-  'XMR-USD': 'Monero',
-  'XRP-USD': 'Ripple',
-  'DOGE-USD': 'Dogecoin',
-  'DASH-USD': 'Dash',
-  'MAID-USD': 'MaidSafeeCoin',
-  'LSK-USD': 'Lisk',
-  'SJCX-USD': 'Storjoin X',
-};
-
-const getTickers = async (): Promise<Array<Promise<Ticker>>> => {
-  const promises: Array<Promise<Ticker>> = [];
-
-  Object.keys(tickers).forEach((code) => {
-    promises.push(getTicker(code as TickerCode, tickers[code as TickerCode]));
-  });
-
-  return promises;
-};
-
-const getTicker = async (
-  code: TickerCode,
-  name: TickerName,
-): Promise<Ticker> => {
-  const BASE_URL = 'https://api.cryptonator.com/api/ticker';
-  const url = `${BASE_URL}/${code}`;
-  const { body } = await got.get<Ticker>(url, {
-    responseType: 'json',
-  });
-
-  body.code = code;
-  body.name = name;
-
-  return body;
-};
-
-const tickerWithInterval = async (ws: WebSocket): Promise<void> => {
-  await Promise.allSettled(await getTickers()).then((results) => {
-    const filteredResult: Ticker[] = [];
-    results.forEach((item) => {
-      if (item.status === 'fulfilled') {
-        filteredResult.push(item.value);
-      }
-    });
-    ws.send(JSON.stringify(filteredResult));
-  });
-};
-
-console.log(`Listening websocket connection to ${String(port)}`);
-
+console.log(`Listening websocket connection to ${String(PORT.wss)}`);
 wss.on('connection', async function (ws, req) {
   const ip = req.socket.remoteAddress;
   console.log(`New connection: ${String(ip)}`);
 
-  await tickerWithInterval(ws);
-
-  setInterval(async () => {
-    const seconds = new Date().getSeconds();
-    if (seconds === 3) {
-      await tickerWithInterval(ws);
+  publisher.get('tickers', async (err, data) => {
+    if (!data) {
+      const tickers = await tickerWithInterval() as Ticker[];
+      const tickersData = JSON.stringify(tickers);
+      publisher.set('tickers', tickersData);
+      ws.send(tickersData);
+    } else {
+      ws.send(data);
     }
-  }, 1000);
+  });
+
+  subscriber.subscribe('tickers');
+  subscriber.on('message', (channel, message) => {
+    ws.send(message);
+  });
 });
