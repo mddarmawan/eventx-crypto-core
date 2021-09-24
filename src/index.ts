@@ -18,6 +18,8 @@ const wss = new Server({
   port: PORT.wss,
 });
 
+subscriber.setMaxListeners(0);
+
 setInterval(async () => {
   const seconds = new Date().getSeconds();
   if (seconds === 3) {
